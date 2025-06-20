@@ -3,7 +3,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import client from 'prom-client';
 import app from './app';
-import { NotificationProcessorService } from './EventProcessor/NotificationEventProcessor';
+import { notificationProcessorService } from './EventProcessor/NotificationEventProcessor';
 import { consumer, producer } from './kafka/kafka';
 
 config();
@@ -47,8 +47,7 @@ const setupConnections = async (): Promise<void> => {
 
 const initializeNotificationProcessor = async (): Promise<void> => {
   try {
-    const notificationProcessor = new NotificationProcessorService();
-    await notificationProcessor.initializePriorityEventConsumer();
+    await notificationProcessorService.initializeEventConsumer();
     console.log('Notification processor initialized');
   } catch (error) {
     console.error('Notification processor initialization failed:', error);

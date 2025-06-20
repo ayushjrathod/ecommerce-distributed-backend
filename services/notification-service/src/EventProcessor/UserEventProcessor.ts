@@ -33,8 +33,8 @@ export class UserUpdateEventProcessor {
   private readonly BASE_DELAY = 500;
   private deadLetterQueueHandler: DeadLetterQueueHandler;
 
-  constructor(deadLetterQueueHandler: DeadLetterQueueHandler) {
-    this.deadLetterQueueHandler = deadLetterQueueHandler;
+  constructor() {
+    this.deadLetterQueueHandler = new DeadLetterQueueHandler();
   }
 
   async processUserUpdateEventWithRetry(

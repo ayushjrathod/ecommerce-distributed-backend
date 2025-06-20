@@ -87,9 +87,34 @@ services:
     networks:
       - backend
 
-  recommendations-service:
+  # recommendations-service:
+  #   build:
+  #     context: ./services/recommendation-service
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     NODE_ENV: development
+  #     KAFKA_BROKERS: kafka:9092
+  #     USERS_SERVICE_URL: http://users-service:8000
+  #     PRODUCTS_SERVICE_URL: http://products-service:8000
+  #     ORDERS_SERVICE_URL: http://orders-service:8000
+  #     REDIS_URL: redis://cache-db:6379
+  #     RECOMMENDATIONS_SERVICE_PORT: 8000
+  #     METRICS_PORT: 9204
+  #   ports:
+  #     - 8005:8000
+  #     - 9204:9204
+  #   depends_on:
+  #     - cache-db
+  #     - orders-service
+  #     - users-service
+  #     - products-service
+  #     - kafka
+  #   networks:
+  #     - backend
+
+  fastapi-recommendation-service:
     build:
-      context: ./services/recommendation-service
+      context: ./services/fastapi-recommendation-service
       dockerfile: Dockerfile
     environment:
       NODE_ENV: development
@@ -135,6 +160,19 @@ services:
       - kafka
     networks:
       - backend
+
+  seeder:
+    image: node:18
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: ['node', 'seed.js']
+    depends_on:
+      - graphql-gateway
+    networks:
+      - backend
+    environment:
+      - NODE_ENV=development
 
   # Databases
   mongo-users:

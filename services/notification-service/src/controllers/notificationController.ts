@@ -67,8 +67,12 @@ export class NotificationController {
       const { trackingId } = req.params;
       await NotificationService.trackEmailOpen(trackingId, res);
     } catch (err) {
-      // Error logging is handled in the service, response is handled by createTransparentPixel
-      // If createTransparentPixel itself throws, it will be caught by the global error handler
+      console.error('Error tracking email open:', err);
+      if (err instanceof Error && err.message === 'Invalid tracking ID') {
+        res.status(400).send(err.message);
+      } else {
+        res.status(500).send(err instanceof Error ? err.message : 'Unexpected error');
+      }
     }
   }
 }

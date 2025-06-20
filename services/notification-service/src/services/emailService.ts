@@ -238,10 +238,26 @@ class EmailService {
         return (content.recommendations || [])
           .map((rec: RecommendationItem) => {
             let itemHtml = itemTemplate;
+            
+            // Handle conditionals within each item
+            // Handle {{#if this.price}}...{{/if}}
+            const priceIfRegex = /\{\{#if this\.price\}\}([\s\S]*?)\{\{\/if\}\}/g;
+            itemHtml = itemHtml.replace(priceIfRegex, (_match: string, ifBlock: string) => {
+              return rec.price !== undefined && rec.price !== null ? ifBlock : '';
+            });
+            
+            // Handle {{#if this.description}}...{{/if}}
+            const descriptionIfRegex = /\{\{#if this\.description\}\}([\s\S]*?)\{\{\/if\}\}/g;
+            itemHtml = itemHtml.replace(descriptionIfRegex, (_match: string, ifBlock: string) => {
+              return rec.description ? ifBlock : '';
+            });
+            
+            // Replace simple variables
             itemHtml = itemHtml.replace(/\{\{this\.name\}\}/g, rec.name || '');
             itemHtml = itemHtml.replace(/\{\{this\.category\}\}/g, rec.category || '');
-            itemHtml = itemHtml.replace(/\{\{this\.price\}\}/g, rec.price || '');
+            itemHtml = itemHtml.replace(/\{\{this\.price\}\}/g, rec.price?.toString() || '');
             itemHtml = itemHtml.replace(/\{\{this\.description\}\}/g, rec.description || '');
+            
             return itemHtml;
           })
           .join('');
