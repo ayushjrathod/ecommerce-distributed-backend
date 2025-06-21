@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 from dotenv import load_dotenv
-from .api.routes import api_router
 import schedule
 from .services import genrateReommendations
 from .services import genrateReommendations
@@ -39,7 +38,6 @@ app.add_middleware(
 PrometheusInstrumentor.instrument(app)
 
 # Include API routes
-app.include_router(api_router, prefix="/api/v1")
 app.include_router(metrics_router)
 
 async def schedule_recommendation():
