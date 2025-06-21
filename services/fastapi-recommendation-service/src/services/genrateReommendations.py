@@ -1,12 +1,14 @@
 import os
 import json
 from .collaborative_filtering import (
-    get_all_users,
-    get_all_products,
-    get_all_orders,
     build_user_item_matrix,
     train_svd_model,
     get_recommendations_for_user,
+)
+from ..infrastructure.http_clients import (
+    get_all_users,
+    get_all_products,
+    get_all_orders,
 )
 from ..infrastructure.kafka import producer
 

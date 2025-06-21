@@ -34,6 +34,24 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
 # Docker
 .dockerignore
 EOL

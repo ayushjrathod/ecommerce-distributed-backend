@@ -8,7 +8,7 @@ import schedule
 from .services import genrateReommendations
 from .services import genrateReommendations
 import os 
-from .infrastructure.metrics import PrometheusInstrumentor
+from .infrastructure.metrics import PrometheusInstrumentor, metrics_router
 
 load_dotenv()
 
@@ -40,6 +40,7 @@ PrometheusInstrumentor.instrument(app)
 
 # Include API routes
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(metrics_router)
 
 async def schedule_recommendation():
     try:

@@ -1,32 +1,7 @@
-import os
-import requests
 import numpy as np
 from sklearn.decomposition import TruncatedSVD
 from typing import List, Dict
-
-def get_all_users() -> List[Dict]:
-    users_service_url = os.getenv("USERS_SERVICE_URL")
-    if not users_service_url:
-        raise ValueError("USERS_SERVICE_URL environment variable is not set.")
-    response = requests.get(f"{users_service_url}/")
-    response.raise_for_status()
-    return response.json().get("result", [])
-
-def get_all_products() -> List[Dict]:
-    products_service_url = os.getenv("PRODUCTS_SERVICE_URL")
-    if not products_service_url:
-        raise ValueError("PRODUCTS_SERVICE_URL environment variable is not set.")
-    response = requests.get(f"{products_service_url}/")
-    response.raise_for_status()
-    return response.json().get("result", [])
-
-def get_all_orders() -> List[Dict]:
-    orders_service_url = os.getenv("ORDERS_SERVICE_URL")
-    if not orders_service_url:
-        raise ValueError("ORDERS_SERVICE_URL environment variable is not set.")
-    response = requests.get(f"{orders_service_url}/")
-    response.raise_for_status()
-    return response.json().get("result", [])
+from ..infrastructure.http_clients import get_all_users, get_all_products, get_all_orders
 
 def build_user_item_matrix(users: List[Dict], products: List[Dict], orders: List[Dict]):
     user_ids = {user['_id']: i for i, user in enumerate(users)}
