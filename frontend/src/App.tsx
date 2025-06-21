@@ -8,6 +8,7 @@ import OrderList from './components/OrderList';
 import ProductList from './components/ProductList';
 import RecommendationCenter from './components/RecommendationCenter';
 import Register from './components/Register';
+import SuperAdminPanel from './components/SuperAdminPanel';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -82,6 +83,12 @@ function App() {
                 path="/recommendations"
                 element={
                   isAuthenticated ? <RecommendationCenter user={user} /> : <Navigate to="/login" />
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  isAuthenticated ? <SuperAdminPanel user={user} /> : <Navigate to="/login" />
                 }
               />
               <Route

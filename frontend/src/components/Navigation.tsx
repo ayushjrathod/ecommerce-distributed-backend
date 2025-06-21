@@ -44,6 +44,11 @@ const Navigation: React.FC<NavigationProps> = ({ isAuthenticated, user, onLogout
                     ➕ Add Product
                   </Link>
                 </li>
+                <li>
+                  <Link to="/admin" className="nav-link admin-link">
+                    🔧 Admin Panel
+                  </Link>
+                </li>
               </ul>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <span style={{ color: '#2c3e50', fontWeight: '500' }}>👋 {user?.name}</span>

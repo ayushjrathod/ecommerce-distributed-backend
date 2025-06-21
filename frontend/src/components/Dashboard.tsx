@@ -60,7 +60,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
       {/* Quick Actions */}
       <div className="card mb-4">
-        <h3 style={{ color: '#2c3e50', marginBottom: '1rem' }}>🚀 Quick Actions</h3>
+        <h3 style={{ color: '#374151', marginBottom: '1rem' }}>🚀 Quick Actions</h3>
         <div className="grid grid-cols-4">
           <Link to="/products" className="btn btn-primary">
             🛍️ Browse Products
@@ -87,7 +87,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       {/* Recent Activity */}
       <div className="grid grid-cols-2">
         <div className="card">
-          <h3 style={{ color: '#2c3e50', marginBottom: '1rem' }}>📦 Recent Orders</h3>
+          <h3 style={{ color: '#374151', marginBottom: '1rem' }}>📦 Recent Orders</h3>
           {ordersLoading ? (
             <div className="loading">Loading orders...</div>
           ) : recentOrders.length > 0 ? (
@@ -104,7 +104,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: '600', color: '#2c3e50' }}>
+                    <div style={{ fontWeight: '600', color: '#111827' }}>
                       Order #{order._id.slice(-6)}
                     </div>
                     <div style={{ color: '#7f8c8d', fontSize: '0.9rem' }}>
@@ -142,7 +142,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </div>
 
         <div className="card">
-          <h3 style={{ color: '#2c3e50', marginBottom: '1rem' }}>🆕 Latest Products</h3>
+          <h3 style={{ color: '#374151', marginBottom: '1rem' }}>🆕 Latest Products</h3>
           {productsLoading ? (
             <div className="loading">Loading products...</div>
           ) : recentProducts.length > 0 ? (
@@ -159,7 +159,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: '600', color: '#2c3e50' }}>{product.name}</div>
+                    <div style={{ fontWeight: '600', color: '#111827' }}>{product.name}</div>
                     <div style={{ color: '#7f8c8d', fontSize: '0.9rem' }}>{product.category}</div>
                   </div>
                   <div
