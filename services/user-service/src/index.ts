@@ -35,8 +35,10 @@ const setupConnections = async (): Promise<void> => {
   if (!mongoUri) {
     throw new Error('Missing Environment variable: MONGO_URI');
   }
-  await mongoose.connect(mongoUri);
-  await producer.connect();
+  Promise.all([
+    mongoose.connect(mongoUri),
+    producer.connect()
+  ])
 };
 
 // Graceful shutdown handler
@@ -45,7 +47,7 @@ const handleShutdown = async (error?: Error): Promise<never> => {
     console.error('Fatal error:', error);
   }
   try {
-    await Promise.allSettled([mongoose.connection.close(), producer.disconnect()]);
+    await Promise.all([mongoose.connection.close(), producer.disconnect()]);
   } catch (err) {
     console.error('Error during shutdown:', err);
   }
