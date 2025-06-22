@@ -5,7 +5,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,
+    port: 3001,
     proxy: {
       '/api': {
         target: 'http://localhost:4000',
@@ -24,7 +24,6 @@ export default defineConfig({
     sourcemap: true,
   },
   define: {
-    // Define global constants for production builds
     __DEV__: JSON.stringify(process.env.NODE_ENV === 'development'),
   },
 });
