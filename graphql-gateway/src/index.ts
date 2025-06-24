@@ -25,7 +25,6 @@ const setupMetrics = () => {
 };
 
 const setupKafkaConsumer = async () => {
-  await consumer.connect();
   await consumer.subscribe({ topic: 'inventory-events' });
   await consumer.run({
     eachMessage: async ({ topic, partition }) => {
@@ -37,29 +36,36 @@ const setupKafkaConsumer = async () => {
 
 const main = async () => {
   try {
-    await cacheClient.connect();
+    await Promise.all([
+      cacheClient.connect(),
+      consumer.connect()
+    ]);
     await setupKafkaConsumer();
 
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 GraphQL API server running at http://localhost:${PORT}/graphql`);
+      console.log(`🚀 GraphQL API server running at ${PORT}/graphql`);
     });
 
     const { metricsApp } = setupMetrics();
     metricsApp.listen(METRICS_PORT, () => {
-      console.log(`📊 Metrics available at http://localhost:${METRICS_PORT}/metrics`);
+      console.log(`📊 Metrics available at ${METRICS_PORT}/metrics`);
     });
   } catch (error) {
     console.error('Failed to start the server:', error);
-    await consumer.disconnect();
-    await cacheClient.disconnect();
+    await Promise.all([
+      consumer.disconnect(),
+      cacheClient.disconnect()
+    ]);
     process.exit(1);
   }
 };
 
 process.on('SIGTERM', async () => {
   console.log('Received SIGTERM. Performing graceful shutdown...');
-  await consumer.disconnect();
-  await cacheClient.disconnect();
+  await Promise.all([
+    consumer.disconnect(),
+    cacheClient.disconnect()
+  ]);
   process.exit(0);
 });
 
