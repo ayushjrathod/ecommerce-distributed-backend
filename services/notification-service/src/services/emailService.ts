@@ -467,8 +467,8 @@ class EmailService {
 
     try {
       const userData = await this.getUserData(userId);
-      // const userEmail = userData?.email;
-      const userEmail = 'temphawk7@gmail.com'; // Keeping the test email as per original code
+      const userEmail = userData?.email;
+      //const userEmail = 'temphawk7@gmail.com'; // Keeping the test email as per original code
       const userName = userData?.name || userData?.username || 'Valued Customer';
 
       if (!userEmail) {
