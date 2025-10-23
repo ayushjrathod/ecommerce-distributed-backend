@@ -1,130 +1,8 @@
-import { gql, useMutation, useQuery } from '@apollo/client';
+import { useMutation, useQuery } from '@apollo/client';
 import React, { useEffect, useState } from 'react';
+import { FETCH_ALL_USERS, FETCH_ALL_PRODUCTS, FETCH_ALL_ORDERS } from '../graphql/operations';
 import { apiService } from '../services/api';
 import SystemMonitor from './SystemMonitor';
-
-// Comprehensive GraphQL Operations
-const GET_ALL_USERS = gql`
-  query GetAllUsers {
-    users {
-      _id
-      email
-      name
-      role
-      isActive
-      createdAt
-      lastLogin
-      orderCount
-      totalSpent
-    }
-  }
-`;
-
-const GET_ALL_PRODUCTS = gql`
-  query GetAllProducts {
-    products {
-      _id
-      name
-      description
-      price
-      category
-      stock
-      imageUrl
-      isActive
-      createdAt
-      salesCount
-      rating
-      reviews {
-        rating
-        comment
-        userId
-      }
-    }
-  }
-`;
-
-const GET_ALL_ORDERS = gql`
-  query GetAllOrders {
-    orders {
-      _id
-      userId
-      status
-      totalAmount
-      items {
-        productId
-        quantity
-        price
-        productName
-      }
-      shippingAddress
-      paymentMethod
-      createdAt
-      updatedAt
-      trackingNumber
-    }
-  }
-`;
-
-const GET_SYSTEM_ANALYTICS = gql`
-  query GetSystemAnalytics {
-    analytics {
-      dailyRevenue
-      monthlyRevenue
-      userGrowth
-      topProducts {
-        productId
-        name
-        salesCount
-        revenue
-      }
-      categoryStats {
-        category
-        productCount
-        revenue
-      }
-    }
-  }
-`;
-
-// Mutations
-const UPDATE_USER = gql`
-  mutation UpdateUser($userId: ID!, $updates: UserUpdateInput!) {
-    updateUser(userId: $userId, updates: $updates) {
-      _id
-      name
-      email
-      role
-      isActive
-    }
-  }
-`;
-
-const UPDATE_PRODUCT = gql`
-  mutation UpdateProduct($productId: ID!, $updates: ProductUpdateInput!) {
-    updateProduct(productId: $productId, updates: $updates) {
-      _id
-      name
-      price
-      stock
-      isActive
-    }
-  }
-`;
-
-const BULK_UPDATE_ORDERS = gql`
-  mutation BulkUpdateOrders($orderIds: [ID!]!, $status: String!) {
-    bulkUpdateOrders(orderIds: $orderIds, status: $status) {
-      _id
-      status
-    }
-  }
-`;
-
-const DELETE_ITEMS = gql`
-  mutation DeleteItems($itemIds: [ID!]!, $itemType: String!) {
-    deleteItems(itemIds: $itemIds, itemType: $itemType)
-  }
-`;
 
 interface SuperAdminPanelProps {
   user: any;
@@ -133,23 +11,16 @@ interface SuperAdminPanelProps {
 const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [filterOptions, setFilterOptions] = useState({
-    userRole: 'all',
     productCategory: 'all',
-    orderStatus: 'all',
     dateRange: '30',
   });
 
   const [systemStats, setSystemStats] = useState({
     totalUsers: 0,
-    activeUsers: 0,
     totalProducts: 0,
     totalOrders: 0,
-    pendingOrders: 0,
-    revenue: 0,
-    conversionRate: 0,
-    avgOrderValue: 0,
+    totalOrderValue: 0,
   });
 
   // GraphQL Queries
@@ -157,121 +28,49 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
     data: usersData,
     loading: usersLoading,
     refetch: refetchUsers,
-  } = useQuery(GET_ALL_USERS, {
+  } = useQuery(FETCH_ALL_USERS, {
     fetchPolicy: 'cache-and-network',
   });
   const {
     data: productsData,
     loading: productsLoading,
     refetch: refetchProducts,
-  } = useQuery(GET_ALL_PRODUCTS, {
+  } = useQuery(FETCH_ALL_PRODUCTS, {
     fetchPolicy: 'cache-and-network',
   });
   const {
     data: ordersData,
     loading: ordersLoading,
     refetch: refetchOrders,
-  } = useQuery(GET_ALL_ORDERS, {
+  } = useQuery(FETCH_ALL_ORDERS, {
     fetchPolicy: 'cache-and-network',
   });
-  const { data: analyticsData, refetch: refetchAnalytics } = useQuery(GET_SYSTEM_ANALYTICS, {
-    fetchPolicy: 'cache-and-network',
-  });
-
-  // Mutations
-  const [updateUser] = useMutation(UPDATE_USER);
-  const [updateProduct] = useMutation(UPDATE_PRODUCT);
-  const [bulkUpdateOrders] = useMutation(BULK_UPDATE_ORDERS);
-  const [deleteItems] = useMutation(DELETE_ITEMS);
 
   // Calculate comprehensive statistics
   useEffect(() => {
     if (usersData && productsData && ordersData) {
-      const users = usersData.users || [];
-      const products = productsData.products || [];
-      const orders = ordersData.orders || [];
+      const users = usersData.fetchAllUsers || [];
+      const products = productsData.fetchAllProducts || [];
+      const orders = ordersData.fetchAllOrders || [];
 
-      const totalRevenue = orders.reduce((sum: number, order: any) => sum + order.totalAmount, 0);
-      const completedOrders = orders.filter((o: any) => o.status === 'completed');
+      // Calculate total order value
+      let totalValue = 0;
+      orders.forEach((order: any) => {
+        if (order.products) {
+          order.products.forEach((product: any) => {
+            totalValue += (product.price || 0) * (product.quantity || 0);
+          });
+        }
+      });
 
       setSystemStats({
         totalUsers: users.length,
-        activeUsers: users.filter((u: any) => u.isActive).length,
         totalProducts: products.length,
         totalOrders: orders.length,
-        pendingOrders: orders.filter((o: any) => ['pending', 'processing'].includes(o.status))
-          .length,
-        revenue: totalRevenue,
-        conversionRate: users.length > 0 ? (completedOrders.length / users.length) * 100 : 0,
-        avgOrderValue: orders.length > 0 ? totalRevenue / orders.length : 0,
+        totalOrderValue: totalValue,
       });
     }
   }, [usersData, productsData, ordersData]);
-
-  // Advanced Actions
-  const handleBulkAction = async (action: string, itemType: string) => {
-    if (selectedItems.length === 0) {
-      alert('Please select items first');
-      return;
-    }
-
-    if (
-      window.confirm(
-        `Are you sure you want to ${action} ${selectedItems.length} selected ${itemType}?`
-      )
-    ) {
-      try {
-        switch (action) {
-          case 'delete':
-            await deleteItems({ variables: { itemIds: selectedItems, itemType } });
-            break;
-          case 'activate':
-            for (const itemId of selectedItems) {
-              if (itemType === 'users') {
-                await updateUser({ variables: { userId: itemId, updates: { isActive: true } } });
-              } else if (itemType === 'products') {
-                await updateProduct({
-                  variables: { productId: itemId, updates: { isActive: true } },
-                });
-              }
-            }
-            break;
-          case 'deactivate':
-            for (const itemId of selectedItems) {
-              if (itemType === 'users') {
-                await updateUser({ variables: { userId: itemId, updates: { isActive: false } } });
-              } else if (itemType === 'products') {
-                await updateProduct({
-                  variables: { productId: itemId, updates: { isActive: false } },
-                });
-              }
-            }
-            break;
-          case 'ship':
-            if (itemType === 'orders') {
-              await bulkUpdateOrders({ variables: { orderIds: selectedItems, status: 'shipped' } });
-            }
-            break;
-          case 'complete':
-            if (itemType === 'orders') {
-              await bulkUpdateOrders({
-                variables: { orderIds: selectedItems, status: 'completed' },
-              });
-            }
-            break;
-        }
-
-        // Refresh data
-        refetchUsers();
-        refetchProducts();
-        refetchOrders();
-        setSelectedItems([]);
-      } catch (error) {
-        console.error('Bulk action failed:', error);
-        alert('Action failed. Please try again.');
-      }
-    }
-  };
 
   const exportData = (type: string, format: 'json' | 'csv' = 'json') => {
     let data: any[] = [];
@@ -279,20 +78,16 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
 
     switch (type) {
       case 'users':
-        data = usersData?.users || [];
+        data = usersData?.fetchAllUsers || [];
         filename = `users-export.${format}`;
         break;
       case 'products':
-        data = productsData?.products || [];
+        data = productsData?.fetchAllProducts || [];
         filename = `products-export.${format}`;
         break;
       case 'orders':
-        data = ordersData?.orders || [];
+        data = ordersData?.fetchAllOrders || [];
         filename = `orders-export.${format}`;
-        break;
-      case 'analytics':
-        data = [systemStats, analyticsData?.analytics];
-        filename = `analytics-export.${format}`;
         break;
     }
 
@@ -325,11 +120,9 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
           alert('Recommendation generation triggered successfully');
           break;
         case 'backup':
-          // Simulate backup
           alert('Database backup initiated. You will be notified when complete.');
           break;
         case 'cache':
-          // Simulate cache clear
           alert('System cache cleared successfully');
           break;
         case 'health':
@@ -359,14 +152,10 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
           value?.toString().toLowerCase().includes(searchTerm.toLowerCase())
         );
 
-      // Category/type filters
+      // Category filters
       let categoryMatch = true;
-      if (type === 'users' && filterOptions.userRole !== 'all') {
-        categoryMatch = item.role === filterOptions.userRole;
-      } else if (type === 'products' && filterOptions.productCategory !== 'all') {
+      if (type === 'products' && filterOptions.productCategory !== 'all') {
         categoryMatch = item.category === filterOptions.productCategory;
-      } else if (type === 'orders' && filterOptions.orderStatus !== 'all') {
-        categoryMatch = item.status === filterOptions.orderStatus;
       }
 
       return searchMatch && categoryMatch;
@@ -478,10 +267,6 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
             {systemStats.totalUsers.toLocaleString()}
           </div>
           <div style={{ color: '#7f8c8d', fontWeight: '600' }}>Total Users</div>
-          <div style={{ fontSize: '0.9rem', color: '#27ae60', marginTop: '0.5rem' }}>
-            {systemStats.activeUsers} active (
-            {((systemStats.activeUsers / systemStats.totalUsers) * 100 || 0).toFixed(1)}%)
-          </div>
         </div>
 
         <div
@@ -496,7 +281,7 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
           </div>
           <div style={{ color: '#7f8c8d', fontWeight: '600' }}>Products</div>
           <div style={{ fontSize: '0.9rem', color: '#3498db', marginTop: '0.5rem' }}>
-            In {new Set(productsData?.products?.map((p: any) => p.category)).size || 0} categories
+            In {new Set(productsData?.fetchAllProducts?.map((p: any) => p.category)).size || 0} categories
           </div>
         </div>
 
@@ -511,9 +296,6 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
             {systemStats.totalOrders.toLocaleString()}
           </div>
           <div style={{ color: '#7f8c8d', fontWeight: '600' }}>Orders</div>
-          <div style={{ fontSize: '0.9rem', color: '#e74c3c', marginTop: '0.5rem' }}>
-            {systemStats.pendingOrders} pending
-          </div>
         </div>
 
         <div
@@ -524,12 +306,9 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
           }}
         >
           <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#9b59b6' }}>
-            ${systemStats.revenue.toLocaleString()}
+            ${systemStats.totalOrderValue.toLocaleString()}
           </div>
-          <div style={{ color: '#7f8c8d', fontWeight: '600' }}>Revenue</div>
-          <div style={{ fontSize: '0.9rem', color: '#27ae60', marginTop: '0.5rem' }}>
-            ${systemStats.avgOrderValue.toFixed(2)} avg order
-          </div>
+          <div style={{ color: '#7f8c8d', fontWeight: '600' }}>Order Value</div>
         </div>
       </div>
 
@@ -610,9 +389,7 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
         <TabButton tabId="users" label="Users" icon="👥" count={systemStats.totalUsers} />
         <TabButton tabId="products" label="Products" icon="📦" count={systemStats.totalProducts} />
         <TabButton tabId="orders" label="Orders" icon="🛒" count={systemStats.totalOrders} />
-        <TabButton tabId="analytics" label="Analytics" icon="📈" />
         <TabButton tabId="monitor" label="System Monitor" icon="🖥️" />
-        <TabButton tabId="tools" label="Admin Tools" icon="🔧" />
       </div>
 
       {/* Enhanced Search and Filters */}
@@ -621,7 +398,7 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '2fr 1fr 1fr auto',
+              gridTemplateColumns: '2fr 1fr auto',
               gap: '1rem',
               alignItems: 'center',
             }}
@@ -640,21 +417,6 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
             />
 
             {/* Dynamic Filters */}
-            {activeTab === 'users' && (
-              <select
-                value={filterOptions.userRole}
-                onChange={(e) =>
-                  setFilterOptions((prev) => ({ ...prev, userRole: e.target.value }))
-                }
-                style={{ padding: '0.75rem', border: '2px solid #e1e1e1', borderRadius: '6px' }}
-              >
-                <option value="all">All Roles</option>
-                <option value="admin">Admin</option>
-                <option value="user">User</option>
-                <option value="moderator">Moderator</option>
-              </select>
-            )}
-
             {activeTab === 'products' && (
               <select
                 value={filterOptions.productCategory}
@@ -664,30 +426,13 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
                 style={{ padding: '0.75rem', border: '2px solid #e1e1e1', borderRadius: '6px' }}
               >
                 <option value="all">All Categories</option>
-                {[...new Set(productsData?.products?.map((p: any) => p.category) || [])].map(
+                {[...new Set(productsData?.fetchAllProducts?.map((p: any) => p.category) || [])].map(
                   (cat) => (
                     <option key={cat} value={cat}>
                       {cat}
                     </option>
                   )
                 )}
-              </select>
-            )}
-
-            {activeTab === 'orders' && (
-              <select
-                value={filterOptions.orderStatus}
-                onChange={(e) =>
-                  setFilterOptions((prev) => ({ ...prev, orderStatus: e.target.value }))
-                }
-                style={{ padding: '0.75rem', border: '2px solid #e1e1e1', borderRadius: '6px' }}
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="processing">Processing</option>
-                <option value="shipped">Shipped</option>
-                <option value="delivered">Delivered</option>
-                <option value="cancelled">Cancelled</option>
               </select>
             )}
 
@@ -702,55 +447,6 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
               <option value="365">Last year</option>
               <option value="all">All time</option>
             </select>
-
-            {selectedItems.length > 0 && (
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <span style={{ color: '#7f8c8d', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
-                  {selectedItems.length} selected
-                </span>
-                <div style={{ display: 'flex', gap: '0.25rem' }}>
-                  <button
-                    onClick={() => handleBulkAction('activate', activeTab)}
-                    className="btn btn-success"
-                    style={{ padding: '0.5rem', fontSize: '0.8rem' }}
-                  >
-                    ✅
-                  </button>
-                  <button
-                    onClick={() => handleBulkAction('deactivate', activeTab)}
-                    className="btn btn-warning"
-                    style={{ padding: '0.5rem', fontSize: '0.8rem' }}
-                  >
-                    ❌
-                  </button>
-                  {activeTab === 'orders' && (
-                    <>
-                      <button
-                        onClick={() => handleBulkAction('ship', activeTab)}
-                        className="btn btn-info"
-                        style={{ padding: '0.5rem', fontSize: '0.8rem' }}
-                      >
-                        🚚
-                      </button>
-                      <button
-                        onClick={() => handleBulkAction('complete', activeTab)}
-                        className="btn btn-success"
-                        style={{ padding: '0.5rem', fontSize: '0.8rem' }}
-                      >
-                        ✅
-                      </button>
-                    </>
-                  )}
-                  <button
-                    onClick={() => handleBulkAction('delete', activeTab)}
-                    className="btn btn-danger"
-                    style={{ padding: '0.5rem', fontSize: '0.8rem' }}
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -781,120 +477,147 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ user }) => {
           </div>
         )}
 
-        {activeTab === 'tools' && (
+        {activeTab === 'users' && (
           <div>
-            <h3 style={{ marginBottom: '2rem', color: '#374151' }}>🔧 Administrative Tools</h3>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                gap: '2rem',
-              }}
-            >
-              <div>
-                <h4 style={{ color: '#3498db', marginBottom: '1rem' }}>🔐 Security & Access</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <button
-                    className="btn btn-warning"
-                    onClick={() => alert('Password reset sent to all users')}
-                  >
-                    🔑 Force Global Password Reset
-                  </button>
-                  <button className="btn btn-info" onClick={() => alert('API keys regenerated')}>
-                    🗝️ Regenerate API Keys
-                  </button>
-                  <button
-                    className="btn btn-danger"
-                    onClick={() => alert('Security audit initiated')}
-                  >
-                    🛡️ Run Security Audit
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => alert('Session data cleared')}
-                  >
-                    🚪 Clear All Sessions
-                  </button>
-                </div>
+            <h3 style={{ marginBottom: '1rem', color: '#374151' }}>👥 User Management</h3>
+            {usersLoading ? (
+              <div>Loading users...</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <th style={{ padding: '1rem', textAlign: 'left', border: '1px solid #ddd' }}>
+                        Name
+                      </th>
+                      <th style={{ padding: '1rem', textAlign: 'left', border: '1px solid #ddd' }}>
+                        Email
+                      </th>
+                      <th style={{ padding: '1rem', textAlign: 'left', border: '1px solid #ddd' }}>
+                        Created
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filterData(usersData?.fetchAllUsers || [], 'users')?.map((user: any) => (
+                      <tr key={user._id}>
+                        <td style={{ padding: '1rem', border: '1px solid #ddd' }}>{user.name}</td>
+                        <td style={{ padding: '1rem', border: '1px solid #ddd' }}>
+                          {user.email}
+                        </td>
+                        <td style={{ padding: '1rem', border: '1px solid #ddd' }}>
+                          {new Date(user.createdAt).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-
-              <div>
-                <h4 style={{ color: '#27ae60', marginBottom: '1rem' }}>🗄️ Data Management</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <button className="btn btn-success" onClick={() => triggerSystemAction('backup')}>
-                    💾 Full Database Backup
-                  </button>
-                  <button
-                    className="btn btn-warning"
-                    onClick={() => alert('Data cleanup initiated')}
-                  >
-                    🧹 Clean Old Data
-                  </button>
-                  <button
-                    className="btn btn-info"
-                    onClick={() => alert('Database optimization started')}
-                  >
-                    ⚡ Optimize Database
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => alert('Analytics recalculated')}
-                  >
-                    📊 Recalculate Analytics
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <h4 style={{ color: '#f39c12', marginBottom: '1rem' }}>🚀 Performance</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <button className="btn btn-primary" onClick={() => triggerSystemAction('cache')}>
-                    🧹 Clear All Caches
-                  </button>
-                  <button className="btn btn-info" onClick={() => alert('CDN cache purged')}>
-                    🌐 Purge CDN Cache
-                  </button>
-                  <button
-                    className="btn btn-warning"
-                    onClick={() => alert('Performance test started')}
-                  >
-                    🏃 Run Performance Test
-                  </button>
-                  <button className="btn btn-success" onClick={() => alert('Services restarted')}>
-                    🔄 Restart Services
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <h4 style={{ color: '#9b59b6', marginBottom: '1rem' }}>🎯 Business Tools</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => triggerSystemAction('recommendations')}
-                  >
-                    🎯 Rebuild Recommendations
-                  </button>
-                  <button
-                    className="btn btn-success"
-                    onClick={() => alert('Inventory synchronized')}
-                  >
-                    📦 Sync Inventory
-                  </button>
-                  <button className="btn btn-info" onClick={() => alert('Reports generated')}>
-                    📊 Generate Reports
-                  </button>
-                  <button className="btn btn-warning" onClick={() => alert('Promotions updated')}>
-                    🏷️ Update Promotions
-                  </button>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
-        {/* Additional tabs would go here with the comprehensive data tables */}
-        {/* Due to length constraints, I'm focusing on the main structure and key features */}
+        {activeTab === 'products' && (
+          <div>
+            <h3 style={{ marginBottom: '1rem', color: '#374151' }}>📦 Product Management</h3>
+            {productsLoading ? (
+              <div>Loading products...</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <th style={{ padding: '1rem', textAlign: 'left', border: '1px solid #ddd' }}>
+                        Name
+                      </th>
+                      <th style={{ padding: '1rem', textAlign: 'left', border: '1px solid #ddd' }}>
+                        Category
+                      </th>
+                      <th style={{ padding: '1rem', textAlign: 'left', border: '1px solid #ddd' }}>
+                        Price
+                      </th>
+                      <th style={{ padding: '1rem', textAlign: 'left', border: '1px solid #ddd' }}>
+                        Quantity
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filterData(productsData?.fetchAllProducts || [], 'products')?.map((product: any) => (
+                      <tr key={product._id}>
+                        <td style={{ padding: '1rem', border: '1px solid #ddd' }}>
+                          {product.name}
+                        </td>
+                        <td style={{ padding: '1rem', border: '1px solid #ddd' }}>
+                          {product.category}
+                        </td>
+                        <td style={{ padding: '1rem', border: '1px solid #ddd' }}>
+                          ${product.price}
+                        </td>
+                        <td style={{ padding: '1rem', border: '1px solid #ddd' }}>
+                          {product.quantity}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'orders' && (
+          <div>
+            <h3 style={{ marginBottom: '1rem', color: '#374151' }}>🛒 Order Management</h3>
+            {ordersLoading ? (
+              <div>Loading orders...</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <th style={{ padding: '1rem', textAlign: 'left', border: '1px solid #ddd' }}>
+                        Order ID
+                      </th>
+                      <th style={{ padding: '1rem', textAlign: 'left', border: '1px solid #ddd' }}>
+                        User ID
+                      </th>
+                      <th style={{ padding: '1rem', textAlign: 'left', border: '1px solid #ddd' }}>
+                        Items
+                      </th>
+                      <th style={{ padding: '1rem', textAlign: 'left', border: '1px solid #ddd' }}>
+                        Value
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(ordersData?.fetchAllOrders || [])?.map((order: any) => {
+                      const orderValue = order.products?.reduce(
+                        (sum: number, p: any) => sum + (p.price || 0) * (p.quantity || 0),
+                        0
+                      ) || 0;
+                      return (
+                        <tr key={order._id}>
+                          <td style={{ padding: '1rem', border: '1px solid #ddd' }}>
+                            {order._id.slice(-8)}
+                          </td>
+                          <td style={{ padding: '1rem', border: '1px solid #ddd' }}>
+                            {order.userId.slice(-8)}
+                          </td>
+                          <td style={{ padding: '1rem', border: '1px solid #ddd' }}>
+                            {order.products?.length || 0} items
+                          </td>
+                          <td style={{ padding: '1rem', border: '1px solid #ddd' }}>
+                            ${orderValue.toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

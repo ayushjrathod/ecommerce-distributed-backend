@@ -4,8 +4,6 @@
   "description": "This project is a **scalable, event-driven microservices-based backend** designed to support the complex operations of an e-commerce platform. It consists of multiple independent services, each with its own database, connected asynchronously through **Kafka** and exposing APIs via **GraphQL**. The system is built with a strong focus on **performance, reliability, and scalability**, featuring **Redis caching**, **JWT authentication**, **priority-based notification handling**, and **observability** through monitoring tools like **Prometheus and Grafana**. The containerized architecture ensures seamless deployment and management.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "prepare": "husky && husky install",
     "lint": "npm run lint --workspaces",
     "format": "npm run format --workspaces"
   },
@@ -20,7 +18,7 @@
     "services/*"
   ],
   "keywords": [],
-  "author": "",
+  "author": "ayushjrathod7@gmail.com",
   "license": "ISC",
   "devDependencies": {
     "husky": "^8.0.0",
