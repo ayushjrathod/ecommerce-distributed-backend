@@ -2,7 +2,7 @@ import { Consumer, KafkaMessage } from 'kafkajs';
 import { consumer, kafka, producer } from '../kafka/kafka';
 import { DeadLetterQueueHandler } from './DeadLetterQueue';
 import { OrderUpdateEventProcessor } from './OrderEventProcessor';
-import { ProductEventProcessor } from './ProductEventProcessor';
+import { ProductEvent, ProductEventContext, ProductEventProcessor } from './ProductEventProcessor';
 import { RecommendationEventProcessor } from './RecommendationEventProcessor';
 import { UserUpdateEventProcessor } from './UserEventProcessor';
 
@@ -62,11 +62,12 @@ export class NotificationProcessorService {
       await this.setupConsumer(this.standardPriorityConsumer, [
         'product-events',
         'recommendation-events',
+        'promotional-events',
       ]);
 
       console.log('Kafka Priority Queues Started Successfully', {
         highPriorityTopics: ['user-events', 'order-events'],
-        standardPriorityTopics: ['product-events', 'recommendation-events'],
+        standardPriorityTopics: ['product-events', 'recommendation-events', 'promotional-events'],
       });
     } catch (err) {
       console.error('Failed to initialize Kafka consumers', err);
@@ -95,7 +96,7 @@ export class NotificationProcessorService {
       return;
     }
 
-    let event: NotificationEvent;
+    let event: unknown;
     try {
       event = JSON.parse(message.value.toString());
     } catch (parseErr) {
@@ -110,10 +111,7 @@ export class NotificationProcessorService {
       return;
     }
 
-    console.log(`Processing event on topic ${topic}`, {
-      type: event.type,
-      userId: event.userId,
-    });
+    console.log(`Processing event on topic ${topic}`);
 
     const metadata: MessageMetadata = { topic, partition, offset: message.offset };
 
@@ -158,13 +156,18 @@ export class NotificationProcessorService {
         );
       case 'product-events':
         return this.productEventProcessor.processProductEventWithRetry(
-          event as any,
-          metadata as any
+          event as ProductEvent,
+          metadata as ProductEventContext
         );
       case 'recommendation-events':
         return this.recommendationEventProcessor.processRecommendationEvent(
           event as any,
           metadata as any
+        );
+      case 'promotional-events':
+        return this.productEventProcessor.processPromotionalEventFromKafka(
+          event as any,
+          metadata as ProductEventContext
         );
       default:
         console.warn(`No handler registered for topic ${topic}`);
@@ -181,6 +184,7 @@ export class NotificationProcessorService {
     ];
 
     await Promise.all(disconnectPromises);
+    console.log('Kafka consumers and producer disconnected.');
   }
 }
 

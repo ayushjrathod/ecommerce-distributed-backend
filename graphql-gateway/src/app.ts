@@ -1,15 +1,15 @@
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import express from 'express';
 import { createHandler } from 'graphql-http/lib/use/express';
-
+import { createRateLimitDirective, RedisStore } from 'graphql-rate-limit';
 import { OrderService } from './services/order';
 import { ProductService } from './services/product';
 import { UserService } from './services/user';
 
+import { cacheClient } from './infrastructure/redis';
 import { orderTypeDefs } from './schema/order';
 import { productTypeDefs } from './schema/product';
 import { userTypeDefs } from './schema/user';
-
 // Define resolvers
 const resolvers = {
   // User resolvers
@@ -30,6 +30,11 @@ const resolvers = {
   placeOrder: OrderService.post,
 };
 
+const rateLimitDirective = createRateLimitDirective({
+  identifyContext: (ctx) => ctx.headers['x-user-id'],
+  store: new RedisStore(cacheClient),
+});
+
 // Create GraphQL schema
 const schema = makeExecutableSchema({
   typeDefs: [userTypeDefs, orderTypeDefs, productTypeDefs],
@@ -45,6 +50,7 @@ app.all(
     rootValue: resolvers,
     context: (req: { headers: any }) => ({
       headers: req.headers,
+      cache: cacheClient,
     }),
   })
 );

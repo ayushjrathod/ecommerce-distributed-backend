@@ -1,6 +1,4 @@
-import { buildSchema } from 'graphql';
-
-const userTypeDefs = buildSchema(`
+const userTypeDefs = `
     type User {
         _id: ID!
         email: String!
@@ -60,6 +58,6 @@ const userTypeDefs = buildSchema(`
         signin(input: SigninInput!): SigninResult!
         updateUserPreferences(id: ID!, preferences: UpdateUserPreferencesInput!): User!
     }
-`);
+`;
 
 export { userTypeDefs };

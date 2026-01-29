@@ -46,7 +46,7 @@ const handleShutdown = async (error?: Error): Promise<never> => {
     console.error('Fatal error:', error);
   }
   try {
-    await Promise.all([consumer.disconnect(), producer.disconnect(), mongoose.disconnect()]);
+    await Promise.all([consumer.disconnect(), producer.disconnect(), mongoose.connection.close()]);
   } catch (err) {
     console.error('Error during shutdown:', err);
   }

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 from dotenv import load_dotenv
+import asyncio
 import schedule
 from .services import genrateReommendations
 from .services import genrateReommendations
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="FastAPI Recommendation Service",
     version="1.0.0",
-    docs_url="/docs" if os.getenv("NODE_ENV") == "development" else "1.0.0",
+    docs_url="/docs" if os.getenv("NODE_ENV") == "development" else None,
 )
 
 # Add CORS middleware
@@ -40,18 +41,20 @@ PrometheusInstrumentor.instrument(app)
 # Include API routes
 app.include_router(metrics_router)
 
-async def schedule_recommendation():
-    try:
-        await schedule.every(10).minutes.do(genrateReommendations.genrateRecommendations)
-        logger.info("Scheduled recommendation generation task started.")
-    except Exception as e:
-        logger.error(f"Error occurred while scheduling recommendations: {e}")
-        
-    
-app.on_event("startup")
+async def recommendation_background_task():
+    while True:
+        try:
+            genrateReommendations.genrateRecommendations()
+            logger.info("Periodic recommendations generated.")
+        except Exception as e:
+            logger.error(f"Error in periodic recommendation generation: {e}")
+        await asyncio.sleep(600)  # wait 10 minutes
+
+@app.on_event("startup")
 async def startup_event():
     logger.info("Starting FastAPI Recommendation Service...")
-    await schedule_recommendation()
+    # Start the background task
+    asyncio.create_task(recommendation_background_task())
 
 # Root endpoint
 @app.get("/")
@@ -60,7 +63,7 @@ async def root():
         "message": "FastAPI Recommendation Service is up!",
         "docs": "/docs",
     }
-
+# manually trigger recommendation generation
 @app.get("/test")
 async def test():
     recommendations = genrateReommendations.genrateRecommendations()

@@ -101,6 +101,8 @@ export const userController = {
             name: user.name,
             email: user.email,
             preferences: user.preferences,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
           },
           access_token: token,
         },

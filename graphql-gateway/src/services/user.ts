@@ -61,7 +61,7 @@ const UserService = {
 
   async signup({ input }: { input: Partial<User> }): Promise<User> {
     try {
-      const { data } = await client.post<ServiceResponse<User>>('/', input);
+      const { data } = await client.post<ServiceResponse<User>>('/signup', input);
 
       if (!data?.result) {
         throw new UserServiceError('Invalid server response');
@@ -111,3 +111,4 @@ const UserService = {
 
 export { UserService, UserServiceError };
 export type { SigninInput, SigninResult, User };
+

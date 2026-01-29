@@ -1,17 +1,37 @@
 import axios from 'axios';
-import cron from 'node-cron';
 import { Notification, NotificationPriority, NotificationType } from '../models/notification';
 import { sendEmail } from '../services/emailService';
 import { NotificationPayload, User } from '../types/types';
 import { DeadLetterQueueHandler } from './DeadLetterQueue';
 
-interface ProductEventContext {
+
+interface ProductDocument { 
+  name: string;
+  price: number;
+  quantity: number;
+  category: string;
+}
+
+interface PromoEventMetadata { 
+  source: string;
+  batchId: string;
+}
+
+interface PromotionalEvent { 
+  timestamp: Date;
+  products: ProductDocument[];
+  eventType: 'promotional-batch';
+  metadata: PromoEventMetadata;
+}
+
+
+export interface ProductEventContext {
   topic: string;
   partition: number;
   offset: string;
 }
 
-interface ProductEvent {
+export interface ProductEvent {
   userId: string;
   email: string;
   eventType: string;
@@ -27,28 +47,17 @@ interface ProductEvent {
 export class ProductEventProcessor {
   private static readonly MAX_RETRIES = 5;
   private static readonly BASE_DELAY = 500;
-  private static readonly CRON_SCHEDULE = '*/5 * * * *';
   private static readonly RANDOM_USERS_COUNT = 10;
   private static readonly REQUEST_TIMEOUT = 5000;
   private deadLetterQueueHandler: DeadLetterQueueHandler;
 
   constructor() {
     this.deadLetterQueueHandler = new DeadLetterQueueHandler();
-    this.initializeCronJob();
+    console.log('[ProductEventProcessor] Initialized. Now expects promotional events from Kafka.');
   }
 
   private static isValidEmail(email: string): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  }
-
-  private initializeCronJob(): void {
-    cron.schedule(ProductEventProcessor.CRON_SCHEDULE, async () => {
-      try {
-        await this.sendRandomUserNotifications();
-      } catch (error) {
-        console.error('[ProductEventProcessor] Scheduled notification process failed:', error);
-      }
-    });
   }
 
   private async getRandomUsers(count: number): Promise<User[]> {
@@ -80,7 +89,7 @@ export class ProductEventProcessor {
   ): Promise<void> {
     await sendEmail(
       userId,
-      `🎉 Special Promotion Just for You, ${content.name}!`,
+      `Special Promotion Just for You, ${content.name}!`,
       NotificationType.PROMOTION,
       {
         subject: `Promotion: Dont miss out on this, ${content.name}!`,
@@ -123,15 +132,30 @@ export class ProductEventProcessor {
     }
   }
 
-  private async sendRandomUserNotifications(): Promise<void> {
+  /**
+   * Method to process PromotionalEvent from Kafka and send notifications.
+   * This now exclusively handles the promotional event sending to users.
+   */
+  public async processPromotionalEventFromKafka(
+    event: PromotionalEvent, // Uses the locally defined interface
+    context: ProductEventContext
+  ): Promise<boolean> {
     try {
-      const randomUsers = await this.getRandomUsers(ProductEventProcessor.RANDOM_USERS_COUNT);
-      if (!randomUsers.length) return;
+      console.log(`[ProductEventProcessor] Processing promotional event from Kafka: Batch ID ${event.metadata.batchId}`);
 
+      const randomUsers = await this.getRandomUsers(ProductEventProcessor.RANDOM_USERS_COUNT);
+      if (!randomUsers.length) {
+        console.log('[ProductEventProcessor] No users found to send promotional event from Kafka.');
+        return true; // Consider it handled if no users to send to
+      }
+
+      // Create a generic promotional message based on the Kafka event
       const promotionalContent = {
-        message: 'Check out our latest promotions! Limited time offers await you.',
-        eventType: 'PROMOTIONAL_CAMPAIGN',
+        message: `Exciting offers on our latest products! Check out: ${event.products.map(p => p.name).join(', ').substring(0, 100)}...`,
+        eventType: event.eventType,
       };
+
+      console.log(`[ProductEventProcessor] Sending notifications for Kafka promo event to ${randomUsers.length} users.`);
 
       const notifications = randomUsers.map((user) =>
         this.createNotificationForEvent({
@@ -141,17 +165,30 @@ export class ProductEventProcessor {
           content: { ...promotionalContent, name: user.name },
           priority: NotificationPriority.STANDARD,
           metadata: {
-            batchId: `PROMO_${Date.now()}`,
+            batchId: event.metadata.batchId,
             isAutomated: true,
             userPreferences: user.preferences,
+
+
           },
         })
       );
 
       await Promise.all(notifications);
+      console.log(`[ProductEventProcessor] Successfully processed promotional event from Kafka: Batch ID ${event.metadata.batchId}`);
+      return true;
     } catch (error) {
-      console.error('[ProductEventProcessor] Failed to process random user notifications:', error);
-      throw error;
+      console.error(`[ProductEventProcessor] Error processing promotional event from Kafka:`, error);
+      await this.deadLetterQueueHandler.handleFailedMessage(
+        context.topic,
+        event as unknown as Record<string, unknown>,
+        error as Error,
+        {
+          partition: context.partition,
+          offset: context.offset,
+        }
+      );
+      return false;
     }
   }
 
@@ -166,7 +203,7 @@ export class ProductEventProcessor {
         email: event.email,
         type: NotificationType.PROMOTION,
         content: {
-          message: event.details?.message || 'Promotional event processed',
+          message: event.details?.message || 'Product event processed',
           eventType: event.eventType,
           name: event.details?.name || 'Valued Customer',
         },
@@ -185,7 +222,6 @@ export class ProductEventProcessor {
         return this.processProductEventWithRetry(event, context, retryCount + 1);
       }
 
-      // Convert ProductEvent to Record<string, unknown>
       const eventAsRecord: Record<string, unknown> = {
         userId: event.userId,
         email: event.email,

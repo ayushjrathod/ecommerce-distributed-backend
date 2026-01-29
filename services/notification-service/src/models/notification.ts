@@ -6,7 +6,7 @@ export enum NotificationType {
   ORDER_UPDATE = 'ORDER_UPDATE',
   PROMOTION = 'PROMOTION',
   EMAIL = 'EMAIL',
-  RECOMMENDATION = 'RECOMMENDATION', // Adding the missing type
+  RECOMMENDATION = 'RECOMMENDATION',
 }
 
 // Priority levels for notifications

@@ -1,6 +1,4 @@
-import { buildSchema } from 'graphql';
-
-const orderTypeDefs = buildSchema(`
+const orderTypeDefs = `
   type OrderProduct {
     _id: ID!
     quantity: Int!
@@ -28,6 +26,6 @@ const orderTypeDefs = buildSchema(`
   type Mutation {
     placeOrder(products: [OrderProductInput]!): Order
   }
-`);
+`;
 
 export { orderTypeDefs };

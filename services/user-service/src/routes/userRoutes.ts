@@ -55,7 +55,7 @@ const validate = {
 // Routes
 router.get('/', userController.getAllUsers);
 router.get('/:id', validate.params(schemas.userId), userController.getUserById);
-router.post('/', validate.body(schemas.signup), userController.signup);
+router.post('/signup', validate.body(schemas.signup), userController.signup);
 router.post('/login', validate.body(schemas.signin), userController.signin);
 router.put('/:id/preferences', validate.params(schemas.userId), userController.updatePreferences);
 

@@ -54,6 +54,9 @@ def genrateRecommendations():
                 all_recommendations.append(recommendations)
                 print(f"Sent recommendations for user {user_id}")
 
+        # Flush the producer to ensure all messages are sent
+        producer.flush()
+
         # For the purpose of returning something similar to the old function
         return all_recommendations[-1] if all_recommendations else []
 

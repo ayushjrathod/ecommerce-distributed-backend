@@ -12,4 +12,6 @@ watch_file('docker-compose.yml')
 #   deps=['notifier']
 # )
 
+
+#### To run the project using Tilt ####
 # sudo /home/ayra/.local/bin/tilt up --stream=true
