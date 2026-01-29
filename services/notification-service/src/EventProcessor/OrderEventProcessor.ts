@@ -38,8 +38,8 @@ export class OrderUpdateEventProcessor {
   private readonly MAX_RETRIES = 3;
   private deadLetterQueueHandler: DeadLetterQueueHandler;
 
-  constructor(deadLetterQueueHandler: DeadLetterQueueHandler) {
-    this.deadLetterQueueHandler = deadLetterQueueHandler;
+  constructor() {
+    this.deadLetterQueueHandler = new DeadLetterQueueHandler();
   }
 
   async processOrderUpdateEventWithRetry(

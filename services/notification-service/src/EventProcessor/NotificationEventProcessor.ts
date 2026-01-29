@@ -1,6 +1,5 @@
-import { Consumer, Kafka, KafkaMessage } from 'kafkajs';
-
-import { consumer, producer } from '../kafka/kafka';
+import { Consumer, KafkaMessage } from 'kafkajs';
+import { consumer, kafka, producer } from '../kafka/kafka';
 import { DeadLetterQueueHandler } from './DeadLetterQueue';
 import { OrderUpdateEventProcessor } from './OrderEventProcessor';
 import { ProductEventProcessor } from './ProductEventProcessor';
@@ -20,45 +19,33 @@ interface NotificationEvent {
 }
 
 export class NotificationProcessorService {
-  private kafka: Kafka;
   private deadLetterQueueHandler: DeadLetterQueueHandler;
   private userUpdateEventProcessor: UserUpdateEventProcessor;
   private orderUpdateEventProcessor: OrderUpdateEventProcessor;
   private productEventProcessor: ProductEventProcessor;
   private recommendationEventProcessor: RecommendationEventProcessor;
-
   private highPriorityConsumer: Consumer;
   private standardPriorityConsumer: Consumer;
+
   static createNotificationForEvent: (event: NotificationEvent) => Promise<void>;
 
   constructor() {
-    this.kafka = new Kafka({
-      clientId: 'notifications',
-      brokers: (process.env['KAFKA_BROKERS'] || '').split(','),
-      retry: {
-        retries: 5,
-        factor: 2,
-        initialRetryTime: 1000,
-      },
-    });
-
     this.deadLetterQueueHandler = new DeadLetterQueueHandler();
 
-    this.userUpdateEventProcessor = new UserUpdateEventProcessor(this.deadLetterQueueHandler);
-    this.orderUpdateEventProcessor = new OrderUpdateEventProcessor(this.deadLetterQueueHandler);
-    this.productEventProcessor = new ProductEventProcessor(this.deadLetterQueueHandler);
-    this.recommendationEventProcessor = new RecommendationEventProcessor(
-      this.deadLetterQueueHandler
-    );
+    this.userUpdateEventProcessor = new UserUpdateEventProcessor();
+    this.orderUpdateEventProcessor = new OrderUpdateEventProcessor();
+    this.productEventProcessor = new ProductEventProcessor();
+    this.recommendationEventProcessor = new RecommendationEventProcessor();
 
-    this.highPriorityConsumer = this.kafka.consumer({
+    // Initialize two priority consumers
+    this.highPriorityConsumer = kafka.consumer({
       groupId: 'priority1-notification-group',
       sessionTimeout: 30000,
       heartbeatInterval: 3000,
       maxInFlightRequests: 1,
     });
 
-    this.standardPriorityConsumer = this.kafka.consumer({
+    this.standardPriorityConsumer = kafka.consumer({
       groupId: 'priority2-notification-group',
       sessionTimeout: 45000,
       heartbeatInterval: 5000,
@@ -66,186 +53,134 @@ export class NotificationProcessorService {
     });
   }
 
-  async initializePriorityEventConsumer(): Promise<void> {
+  /**
+   * Connects and starts both high and standard priority consumers
+   */
+  async initializeEventConsumer(): Promise<void> {
     try {
-      await this.setupHighPriorityConsumer();
-      await this.setupStandardPriorityConsumer();
+      await this.setupConsumer(this.highPriorityConsumer, ['user-events', 'order-events']);
+      await this.setupConsumer(this.standardPriorityConsumer, [
+        'product-events',
+        'recommendation-events',
+      ]);
 
-      console.log('Kafka Priority Consumers Started Successfully', {
+      console.log('Kafka Priority Queues Started Successfully', {
         highPriorityTopics: ['user-events', 'order-events'],
         standardPriorityTopics: ['product-events', 'recommendation-events'],
       });
-    } catch (setupError) {
-      console.error('Kafka Consumers Setup Failed:', setupError);
-      throw setupError;
+    } catch (err) {
+      console.error('Failed to initialize Kafka consumers', err);
+      throw err;
     }
   }
 
-  private async setupHighPriorityConsumer(): Promise<void> {
-    await this.highPriorityConsumer.connect();
-    await this.highPriorityConsumer.subscribe({
-      topics: ['user-events', 'order-events'],
-      fromBeginning: false,
-    });
+  private async setupConsumer(consumerInstance: Consumer, topics: string[]): Promise<void> {
+    await consumerInstance.connect();
+    await consumerInstance.subscribe({ topics, fromBeginning: false });
 
-    await this.highPriorityConsumer.run({
+    await consumerInstance.run({
       eachMessage: async ({ topic, message, partition }) => {
-        await this.processHighPriorityMessage(topic, message, partition);
+        await this.processMessage(topic, message, partition);
       },
     });
   }
 
-  private async setupStandardPriorityConsumer(): Promise<void> {
-    await this.standardPriorityConsumer.connect();
-    await this.standardPriorityConsumer.subscribe({
-      topics: ['product-events', 'recommendation-events'],
-      fromBeginning: false,
-    });
-
-    await this.standardPriorityConsumer.run({
-      eachMessage: async ({ topic, message, partition }) => {
-        await this.processStandardPriorityMessage(topic, message, partition);
-      },
-    });
-  }
-
-  private async processHighPriorityMessage(
+  private async processMessage(
     topic: string,
     message: KafkaMessage,
     partition: number
   ): Promise<void> {
     if (!message.value) {
-      console.error('Received null message value');
+      console.warn(`Skipping empty message on topic ${topic}`);
       return;
     }
 
-    const event = JSON.parse(message.value.toString());
-    console.log(`Processing High Priority Event: ${topic}`, {
-      eventType: event.type,
+    let event: NotificationEvent;
+    try {
+      event = JSON.parse(message.value.toString());
+    } catch (parseErr) {
+      const errorMessage = parseErr instanceof Error ? parseErr.message : 'Unknown parse error';
+      console.error(`JSON parse error on topic ${topic}:`, errorMessage);
+      await this.deadLetterQueueHandler.queueFailedMessage(topic, message.value, {
+        originalTopic: topic,
+        partition,
+        offset: message.offset,
+        reason: 'Invalid JSON payload',
+      });
+      return;
+    }
+
+    console.log(`Processing event on topic ${topic}`, {
+      type: event.type,
       userId: event.userId,
     });
 
     const metadata: MessageMetadata = { topic, partition, offset: message.offset };
-    let processingResult = false;
 
     try {
-      if (topic === 'user-events') {
-        processingResult = await this.userUpdateEventProcessor.processUserUpdateEventWithRetry(
-          event,
-          metadata
-        );
-      } else if (topic === 'order-events') {
-        processingResult = await this.orderUpdateEventProcessor.processOrderUpdateEventWithRetry(
-          event,
-          metadata
-        );
+      const success = await this.handleEventByTopic(topic, event, metadata);
+      if (!success) {
+        await this.deadLetterQueueHandler.queueFailedMessage(topic, message.value, {
+          originalTopic: topic,
+          partition,
+          offset: message.offset,
+          reason: 'Handler returned false',
+        });
       }
-
-      await this.handleFailedProcessing(
-        processingResult,
-        topic,
-        message.value,
-        metadata,
-        'High Priority Event Processing Failed'
-      );
-    } catch (error) {
-      await this.handleProcessingError(error as Error, topic, message.value, metadata);
-    }
-  }
-
-  private async processStandardPriorityMessage(
-    topic: string,
-    message: KafkaMessage,
-    partition: number
-  ): Promise<void> {
-    if (!message.value) {
-      console.error('Received null message value');
-      return;
-    }
-
-    const event = JSON.parse(message.value.toString());
-    console.log(`Processing Standard Priority Event: ${topic}`, {
-      eventType: event.type,
-      userId: event.userId,
-    });
-
-    const metadata: MessageMetadata = { topic, partition, offset: message.offset };
-    let processingResult = false;
-
-    try {
-      if (topic === 'product-events') {
-        processingResult = await this.productEventProcessor.processProductEventWithRetry(
-          event,
-          metadata
-        );
-      } else if (topic === 'recommendation-events') {
-        processingResult = await this.recommendationEventProcessor.processRecommendationEvent(
-          event,
-          metadata
-        );
-      }
-
-      await this.handleFailedProcessing(
-        processingResult,
-        topic,
-        message.value,
-        metadata,
-        'Standard Priority Event Processing Failed'
-      );
-    } catch (error) {
-      await this.handleProcessingError(error as Error, topic, message.value, metadata);
-    }
-  }
-
-  private async handleFailedProcessing(
-    processingResult: boolean,
-    topic: string,
-    messageValue: Buffer,
-    metadata: MessageMetadata,
-    reason: string
-  ): Promise<void> {
-    if (!processingResult) {
-      await this.deadLetterQueueHandler.queueFailedMessage(topic, messageValue, {
-        originalTopic: metadata.topic,
-        partition: metadata.partition,
-        offset: metadata.offset,
-        reason,
+    } catch (handlerErr) {
+      const errorMessage =
+        handlerErr instanceof Error ? handlerErr.message : 'Unknown handler error';
+      console.error(`Error in handler for ${topic}:`, errorMessage);
+      await this.deadLetterQueueHandler.queueFailedMessage(topic, message.value, {
+        originalTopic: topic,
+        partition,
+        offset: message.offset,
+        reason: errorMessage,
       });
     }
   }
 
-  private async handleProcessingError(
-    error: Error,
+  private async handleEventByTopic(
     topic: string,
-    messageValue: Buffer,
+    event: unknown,
     metadata: MessageMetadata
-  ): Promise<void> {
-    console.error(`Event Processing Error: ${topic}`, {
-      error: error.message,
-      topic,
-      stack: error.stack,
-    });
-
-    await this.deadLetterQueueHandler.queueFailedMessage(topic, messageValue, {
-      originalTopic: metadata.topic,
-      partition: metadata.partition,
-      offset: metadata.offset,
-      reason: error.message,
-    });
+  ): Promise<boolean> {
+    switch (topic) {
+      case 'user-events':
+        return this.userUpdateEventProcessor.processUserUpdateEventWithRetry(
+          event as any,
+          metadata as any
+        );
+      case 'order-events':
+        return this.orderUpdateEventProcessor.processOrderUpdateEventWithRetry(
+          event as any,
+          metadata as any
+        );
+      case 'product-events':
+        return this.productEventProcessor.processProductEventWithRetry(
+          event as any,
+          metadata as any
+        );
+      case 'recommendation-events':
+        return this.recommendationEventProcessor.processRecommendationEvent(
+          event as any,
+          metadata as any
+        );
+      default:
+        console.warn(`No handler registered for topic ${topic}`);
+        return false;
+    }
   }
 
   async shutdown(): Promise<void> {
-    try {
-      await Promise.all([
-        this.highPriorityConsumer.disconnect(),
-        this.standardPriorityConsumer.disconnect(),
-        consumer.disconnect(),
-        producer.disconnect(),
-      ]);
-      console.log('Notification processor service shut down successfully');
-    } catch (error) {
-      console.error('Error during notification processor shutdown:', error);
-    }
+    const disconnectPromises = [
+      this.highPriorityConsumer.disconnect(),
+      this.standardPriorityConsumer.disconnect(),
+      consumer.disconnect(),
+      producer.disconnect(),
+    ];
+
+    await Promise.all(disconnectPromises);
   }
 }
 

@@ -11,17 +11,16 @@ import { NotificationDoc, User } from '../types/types';
 import { DeadLetterQueueHandler } from './DeadLetterQueue';
 
 interface RecommendationItem {
-  productId: string;
+  _id: string;
   name: string;
   price: number;
   category: string;
 }
 
 interface RecommendationEvent {
+  type: string;
   userId: string;
   recommendations: RecommendationItem[];
-  timestamp: string;
-  type?: string;
 }
 
 export class RecommendationEventProcessor {
@@ -31,12 +30,12 @@ export class RecommendationEventProcessor {
   private readonly concurrencyLimit = 5;
   private readonly maxRetries = 3;
   private readonly emailTemplate = {
-    subject: 'Your Personalized Product Recommendations',
+    subject: 'Curated Product Recommendations Just for You!',
     type: NotificationType.RECOMMENDATION,
   };
 
-  constructor(deadLetterQueueHandler: DeadLetterQueueHandler) {
-    this.deadLetterQueueHandler = deadLetterQueueHandler;
+  constructor() {
+    this.deadLetterQueueHandler = new DeadLetterQueueHandler();
     this.usersServiceUrl = process.env.USERS_SERVICE_URL || '';
     this.initializeCronJob();
   }
@@ -92,12 +91,11 @@ export class RecommendationEventProcessor {
       }
 
       const recommendations = notification.content.recommendations as RecommendationItem[];
-      const emailContent: EmailContent = {
-        html: this.formatRecommendationEmail(recommendations),
-        subject: this.emailTemplate.subject,
-      };
-
-      await sendEmail(user._id, this.emailTemplate.subject, this.emailTemplate.type, emailContent);
+      // Pass recommendations object directly as content
+      await sendEmail(user._id, this.emailTemplate.subject, this.emailTemplate.type, {
+        recommendations,
+        itemCount: recommendations.length,
+      });
 
       await this.markNotificationProcessed(notification, true);
       console.log(`Email sent successfully to ${user.email}`);
@@ -150,6 +148,8 @@ export class RecommendationEventProcessor {
   private validateEvent(event: RecommendationEvent): boolean {
     return Boolean(
       event?.userId &&
+        event.type &&
+        event &&
         Array.isArray(event.recommendations) &&
         event.recommendations.length > 0 &&
         event.recommendations.every(this.validateRecommendationItem)
@@ -157,7 +157,7 @@ export class RecommendationEventProcessor {
   }
 
   private validateRecommendationItem(rec: RecommendationItem): boolean {
-    return Boolean(rec.productId && rec.name && typeof rec.price === 'number' && rec.category);
+    return Boolean(rec._id && rec.name && typeof rec.price === 'number' && rec.category);
   }
 
   private validateEmailFormat(email: string): boolean {
@@ -168,18 +168,19 @@ export class RecommendationEventProcessor {
     user: User,
     event: RecommendationEvent
   ): Promise<NotificationDoc | null> {
+    const now = new Date().toISOString();
     return Notification.create({
       userId: user._id,
       email: user.email,
       type: NotificationType.RECOMMENDATION,
       content: {
         recommendations: event.recommendations,
-        timestamp: event.timestamp,
+        timestamp: now,
       },
       priority: NotificationPriority.STANDARD,
       metadata: {
-        recommendationSource: event.type || 'RECOMMENDATIONS',
-        generatedAt: event.timestamp,
+        recommendationSource: event.type,
+        generatedAt: now,
         userPreferences: user.preferences,
       },
       emailSent: false,
@@ -192,7 +193,7 @@ export class RecommendationEventProcessor {
     try {
       const response = await axios.get(`${this.usersServiceUrl}/${userId}`, {
         timeout: 5000,
-        validateStatus: (status) => status === 200,
+        validateStatus: (status: number) => status === 200,
       });
 
       const userData = response.data?.result || response.data;
@@ -207,12 +208,14 @@ export class RecommendationEventProcessor {
         name: userData.name || 'Valued Customer',
         preferences: userData.preferences || {},
       };
-    } catch (error) {
+    } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
         console.error(`Failed to fetch user data for ${userId}:`, {
           status: error.response?.status,
           message: error.message,
         });
+      } else if (error instanceof Error) {
+        console.error(`Error fetching user data for ${userId}:`, error.message);
       } else {
         console.error(`Error fetching user data for ${userId}:`, error);
       }

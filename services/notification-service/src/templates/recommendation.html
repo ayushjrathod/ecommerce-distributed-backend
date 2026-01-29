@@ -12,16 +12,29 @@
       </div>
       <div class="content">
         <p>Dear {{userName}},</p>
+        {{#if content.itemCount}}
         <p>We've handpicked {{content.itemCount}} recommendations just for you:</p>
+        {{else}}
+        <p>Here is the curated list of the products:</p>
+        {{/if}}
 
         <div class="info-box">
+          {{#if content.recommendations}}
           {{#each content.recommendations}}
           <div class="recommendation-item">
             <h3>{{this.name}}</h3>
             <p>Category: {{this.category}}</p>
+            {{#if this.price}}
             <p>Price: ${{this.price}}</p>
+            {{/if}}
+            {{#if this.description}}
+            <p>{{this.description}}</p>
+            {{/if}}
           </div>
           {{/each}}
+          {{else}}
+          <div>{{{content}}}</div>
+          {{/if}}
         </div>
 
         <a href="{{platformUrl}}/recommendations" class="button">View All Recommendations</a>

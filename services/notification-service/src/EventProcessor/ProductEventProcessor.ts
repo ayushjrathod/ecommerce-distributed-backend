@@ -30,8 +30,10 @@ export class ProductEventProcessor {
   private static readonly CRON_SCHEDULE = '*/5 * * * *';
   private static readonly RANDOM_USERS_COUNT = 10;
   private static readonly REQUEST_TIMEOUT = 5000;
+  private deadLetterQueueHandler: DeadLetterQueueHandler;
 
-  constructor(private readonly deadLetterQueueHandler: DeadLetterQueueHandler) {
+  constructor() {
+    this.deadLetterQueueHandler = new DeadLetterQueueHandler();
     this.initializeCronJob();
   }
 

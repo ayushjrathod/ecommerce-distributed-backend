@@ -1,112 +1,96 @@
 import { config } from 'dotenv';
+import express from 'express';
 import mongoose from 'mongoose';
+import client from 'prom-client';
 import app from './app';
-import { NotificationProcessorService } from './EventProcessor/NotificationEventProcessor';
-import { connectConsumer, connectProducer, consumer, producer } from './kafka/kafka';
+import { notificationProcessorService } from './EventProcessor/NotificationEventProcessor';
+import { consumer, producer } from './kafka/kafka';
 
 config();
 
-type RequiredEnvVars = {
-  MONGO_URI: string;
-  KAFKA_BROKERS: string;
-  USERS_SERVICE_URL: string;
-  SMTP_HOST: string;
-  SMTP_USER: string;
-  SMTP_PASS: string;
-  NOTIFICATIONS_SERVICE_PORT: string;
+const ENV = {
+  MONGO_URI: process.env.MONGO_URI!,
+  KAFKA_BROKERS: process.env.KAFKA_BROKERS!,
+  USERS_SERVICE_URL: process.env.USERS_SERVICE_URL!,
+  SMTP_HOST: process.env.SMTP_HOST!,
+  SMTP_USER: process.env.SMTP_USER!,
+  SMTP_PASS: process.env.SMTP_PASS!,
+  NOTIFICATIONS_SERVICE_PORT: process.env.NOTIFICATIONS_SERVICE_PORT! || '8000',
+  METRICS_PORT: process.env.METRICS_PORT || '9205',
+};
+const validateEnvironment = async (): Promise<void> => {
+  for (const [key, value] of Object.entries(ENV)) {
+    if (!value) {
+      throw new Error(`Missing required environment variable`);
+    }
+  }
 };
 
-class NotificationServiceBootstrap {
-  private static async validateEnvironment(): Promise<void> {
-    const required: (keyof RequiredEnvVars)[] = [
-      'MONGO_URI',
-      'KAFKA_BROKERS',
-      'USERS_SERVICE_URL',
-      'SMTP_HOST',
-      'SMTP_USER',
-      'SMTP_PASS',
-    ];
+const setupMetrics = (): client.Registry => {
+  const register = new client.Registry();
+  register.setDefaultLabels({ app: 'notification-service' });
+  client.collectDefaultMetrics({ register });
+  return register;
+};
+const setupMetricsServer = (register: client.Registry): express.Application => {
+  const metricsApp = express();
+  metricsApp.get('/metrics', async (req, res) => {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  });
+  return metricsApp;
+};
 
-    const missing = required.filter((key) => !process.env[key]);
-    if (missing.length > 0) {
-      throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
-    }
+const setupConnections = async (): Promise<void> => {
+  await Promise.all([producer.connect(), mongoose.connect(ENV.MONGO_URI), consumer.connect()]);
+};
+
+const initializeNotificationProcessor = async (): Promise<void> => {
+  try {
+    await notificationProcessorService.initializeEventConsumer();
+    console.log('Notification processor initialized');
+  } catch (error) {
+    console.error('Notification processor initialization failed:', error);
+    throw error;
   }
+};
 
-  private static async connectToMongoDB(): Promise<void> {
-    try {
-      await mongoose.connect(process.env.MONGO_URI!, {
-        retryWrites: true,
-        w: 'majority',
-      });
-      console.log('MongoDB Connected Successfully');
-    } catch (error) {
-      console.error('MongoDB connection failed:', error);
-      throw error;
-    }
+const handleShutdown = async (error?: Error): Promise<void> => {
+  if (error) {
+    console.error('Error during shutdown:', error);
   }
-
-  private static async setupKafka(): Promise<void> {
-    try {
-      await connectProducer();
-      await connectConsumer();
-      console.log('Kafka setup completed successfully');
-    } catch (error) {
-      console.error('Kafka setup failed:', error);
-      throw error;
-    }
+  try {
+    await Promise.all([mongoose.connection.close(), producer.disconnect(), consumer.disconnect()]);
+  } catch (error) {
+    console.error('Error during shutdown:', error);
+    process.exit(error ? 1 : 0);
   }
+};
 
-  private static async initializeNotificationProcessor(): Promise<void> {
-    try {
-      const notificationProcessor = new NotificationProcessorService();
-      await notificationProcessor.initializePriorityEventConsumer();
-      console.log('Notification processor initialized');
-    } catch (error) {
-      console.error('Notification processor initialization failed:', error);
-      throw error;
-    }
-  }
+const startServer = async (): Promise<void> => {
+  try {
+    await validateEnvironment();
+    await setupConnections();
+    await initializeNotificationProcessor();
 
-  private static async startExpressServer(): Promise<void> {
-    const port = process.env.NOTIFICATIONS_SERVICE_PORT!;
-    app.listen(port, () => {
-      console.log(`Notifications service running on port ${port}`);
+    //main application
+    app.listen(parseInt(ENV.NOTIFICATIONS_SERVICE_PORT, 10), '0.0.0.0', () => {
+      console.log(`Notification service running on port ${ENV.NOTIFICATIONS_SERVICE_PORT}`);
     });
+    // Start metrics server
+    const metricsApp = setupMetricsServer(setupMetrics());
+    metricsApp.listen(parseInt(ENV.METRICS_PORT, 10), '0.0.0.0', () => {
+      console.log(`Metrics available at port ${ENV.METRICS_PORT}/metrics`);
+    });
+  } catch (error) {
+    await handleShutdown(error as Error);
   }
+};
 
-  public static async shutdown(): Promise<void> {
-    console.log('Initiating graceful shutdown...');
-    try {
-      await Promise.allSettled([
-        mongoose.connection.close(),
-        producer.disconnect(),
-        consumer.disconnect(),
-      ]);
-      console.log('Cleanup completed successfully');
-    } catch (error) {
-      console.error('Error during shutdown:', error);
-    } finally {
-      process.exit(0);
-    }
-  }
+// Handle unexpected errors
+process.on('unhandledRejection', handleShutdown);
+process.on('uncaughtException', handleShutdown);
+process.on('SIGTERM', handleShutdown);
+process.on('SIGINT', handleShutdown);
 
-  public static async start(): Promise<void> {
-    try {
-      await this.validateEnvironment();
-      await this.connectToMongoDB();
-      await this.setupKafka();
-      await this.initializeNotificationProcessor();
-      await this.startExpressServer();
-    } catch (error) {
-      console.error('Notification Service Initialization Failed:', error);
-      await this.shutdown();
-      process.exit(1);
-    }
-  }
-}
-
-process.on('SIGTERM', NotificationServiceBootstrap.shutdown);
-process.on('SIGINT', NotificationServiceBootstrap.shutdown);
-
-NotificationServiceBootstrap.start().catch(console.error);
+startServer();
