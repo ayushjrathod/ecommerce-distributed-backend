@@ -4,8 +4,6 @@
 
 ---
 
-### [Watch Demo Video](https://youtu.be/Od0cw2rYbsE)
-
 ## Why This Architecture Stands Out
 
 ### Independent & Scalable Services
