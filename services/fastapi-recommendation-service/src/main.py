@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 import logging
 from dotenv import load_dotenv
 import asyncio
+import schedule
 from .services import genrateReommendations
 from .services import genrateReommendations
 import os 

@@ -1,36 +1,34 @@
-# 🚀 E-Commerce Microservices Backend: Scalable, Event-Driven Architecture
+# E-Commerce Microservices Backend: Scalable, Event-Driven Architecture
 
 #### This project implements a backend system for an e-commerce platform utilizing a microservices architecture with graphql-gateway being single point of entry. While developing this project i focused on building a scalable, event-driven architecture that can handle high traffic and provide real-time updates. The system is designed to be modular, allowing for easy addition of new features and services.
 
 ---
 
-### [Watch Demo Video](https://youtu.be/Od0cw2rYbsE)
+## Why This Architecture Stands Out
 
-## ✨ Why This Architecture Stands Out
-
-### 🧩 Independent & Scalable Services
+### Independent & Scalable Services
 
 Each core domain (Users, Products, Orders) operates as a standalone service with dedicated databases. Scale individual components independently to meet demand spikes without over-provisioning resources.
 
-### ⚡ Real-Time Event-Driven Communication
+### Real-Time Event-Driven Communication
 
 Services communicate asynchronously via **Apache Kafka**, ensuring loose coupling and fault tolerance. Key events (new orders, inventory updates) trigger real-time reactions across the system while **Dead Letter Queues** handle failures gracefully.
 
-### 🔍 Unified Data Access with GraphQL
+### Unified Data Access with GraphQL
 
 Clients interact through a single **GraphQL Gateway** that aggregates data from multiple services, reducing roundtrips and enabling tailored responses. Redis caching slashes response times for frequent queries.
 
-### 🔒 Zero-Trust Security Model
+### Zero-Trust Security Model
 
 JWT-based authentication secures every API call. Tokens issued by the User Service are validated at the gateway, ensuring only authorized requests reach downstream services.
 
-### 📊 Observability First
+### Observability First
 
 Monitor every heartbeat of the system with **Prometheus metrics** and **Grafana dashboards**. Track API latency, Kafka consumer lag, cache hit ratios, and more in real time.
 
 ---
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 ![E-Commerce Microservices Architecture Diagram](archDiagram2.png)
 
@@ -46,7 +44,7 @@ Monitor every heartbeat of the system with **Prometheus metrics** and **Grafana 
 
 ---
 
-## 🛠️ Tech Stack Deep Dive
+## Tech Stack Deep Dive
 
 | Category            | Technologies                                                                        |
 | ------------------- | ----------------------------------------------------------------------------------- |
@@ -62,7 +60,7 @@ Monitor every heartbeat of the system with **Prometheus metrics** and **Grafana 
 
 ---
 
-## 🚦 Running Locally in 5 minutes
+## Running Locally in 5 minutes
 
 ### Prerequisites
 
@@ -86,7 +84,7 @@ docker-compose up --build
 
 ---
 
-## 🌟 Key Features Breakdown
+## Key Features Breakdown
 
 ### 1. Intelligent Product Recommendations
 
