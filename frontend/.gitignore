@@ -1,0 +1,14 @@
+# Frontend (Vite/React/TS)
+node_modules/
+dist/
+build/
+.env
+.env.local
+.vite/
+npm-debug.log
+yarn-error.log
+.DS_Store
+.idea/
+.vscode/
+coverage/
+*.log

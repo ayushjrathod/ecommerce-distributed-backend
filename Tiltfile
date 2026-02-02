@@ -15,3 +15,5 @@ watch_file('docker-compose.yml')
 
 #### To run the project using Tilt ####
 # sudo /home/ayra/.local/bin/tilt up --stream=true
+# tilt up --stream=true
+# tilt down
