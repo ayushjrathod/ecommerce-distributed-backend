@@ -148,7 +148,6 @@ services:
       PORT: 8080
     depends_on:
       - kafka
-      - zookeeper
     networks:
       - backend
 
@@ -217,24 +216,65 @@ services:
     networks:
       - backend
 
-  # Message Broker
+  # Message Broker (KRaft mode - Kafka without Zookeeper)
   kafka:
-    image: wurstmeister/kafka
+    image: apache/kafka:latest
     ports:
       - 9092:9092
     environment:
-      KAFKA_CREATE_TOPICS: 'order-events:1:1,inventory-events:1:1, notification-events:1:1'
-      KAFKA_ADVERTISED_HOST_NAME: kafka
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-    depends_on:
-      - zookeeper
-    networks:
-      - backend
-
-  zookeeper:
-    image: wurstmeister/zookeeper
-    ports:
-      - 2181:2181
+      # Unique identifier for this Kafka node in the cluster (must be unique per node)
+      KAFKA_NODE_ID: 1
+      
+      # Defines the roles this node will serve: 'broker' handles client requests,
+      # 'controller' manages cluster metadata (topics, partitions, replicas)
+      # Combined mode (broker,controller) is suitable for development/single-node setups
+      KAFKA_PROCESS_ROLES: broker,controller
+      
+      # Network listeners for different types of connections:
+      # - PLAINTEXT://0.0.0.0:9092: Client connections (producers/consumers)
+      # - CONTROLLER://0.0.0.0:9093: Inter-controller communication for metadata consensus
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      
+      # Address advertised to clients for connecting to this broker
+      # Use 'kafka' hostname for Docker network communication
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      
+      # Specifies which listener is used for controller-to-controller communication
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      
+      # Maps listener names to security protocols (PLAINTEXT = no encryption)
+      # In production, consider using SSL or SASL_SSL for security
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      
+      # List of controller nodes participating in metadata quorum (Raft consensus)
+      # Format: node_id@host:port (here: node 1 at kafka:9093)
+      # For multi-node clusters, list all controllers: 1@kafka1:9093,2@kafka2:9093,3@kafka3:9093
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      
+      # Number of replicas for the __consumer_offsets topic (stores consumer positions)
+      # Set to 1 for development, use 3+ for production high availability
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      
+      # Number of replicas for transaction state logs (ensures exactly-once semantics)
+      # Set to 1 for development, use 3+ for production
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      
+      # Minimum in-sync replicas for transaction logs before write is considered successful
+      # Set to 1 for development, use 2+ for production (ensures durability)
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      
+      # Initial delay before consumer group rebalancing starts (in milliseconds)
+      # 0 = start rebalancing immediately (good for dev), use 3000-30000 for production
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      
+      # Default number of partitions for auto-created topics
+      # More partitions = better parallelism, use 3-6 for production
+      KAFKA_NUM_PARTITIONS: 1
+      
+      # Unique cluster identifier (base64-encoded UUID)
+      # Generate new ID with: `kafka-storage.sh random-uuid` or use any 22-char base64 string
+      # This ID must remain constant for the cluster lifetime
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
     networks:
       - backend
 

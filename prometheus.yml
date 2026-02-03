@@ -2,10 +2,9 @@ global:
   scrape_interval: 5s
 
 scrape_configs:
-  - job_name: 'kafka'
-    static_configs:
-      - targets: ['kafka:9308']
-
+  # Kafka metrics removed - apache/kafka doesn't expose Prometheus metrics by default but wurstmeister/kafka did.
+  # can consider switching to bitnami/kafka with JMX exporter for prometheus metrics in the future. 
+  
   - job_name: 'graphql-gateway'
     static_configs:
       - targets: ['graphql-gateway:9200']
